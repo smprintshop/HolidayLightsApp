@@ -69,7 +69,8 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({ onCancel, onSubmit, ini
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+    // Explicitly cast to File[] to fix the 'unknown' assignment error
+    const files = Array.from(e.target.files || []) as File[];
     if (files.length === 0) return;
     
     setIsUploading(true);

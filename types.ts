@@ -1,10 +1,6 @@
 export enum VotingCategory {
   OVERALL = 'Best Overall Display',
-  LIGHTS = 'Best Use of Lights',
-  CREATIVE = 'Most Creative',
-  ANIMATED = 'Best Animated Display',
-  DIY = 'Best DIY Decorations',
-  CLASSIC = 'Best Classic Christmas'
+  ANIMATED = 'Best Animated Display'
 }
 
 export interface Photo {

@@ -1,3 +1,4 @@
+
 import { User, DisplaySubmission, VotingCategory } from '../types';
 
 const DB_NAME = 'HolidayLightsDB';
@@ -121,6 +122,39 @@ export const dbService = {
               resolve({ user, sub });
             } else {
               reject('Sub not found');
+            }
+          };
+        });
+      }
+    }
+    return null;
+  },
+
+  retractVote: async (userId: string, submissionId: string, category: VotingCategory) => {
+    const users = dbService.getUsers();
+    const user = users.find(u => u.id === userId);
+    const db = await openDB();
+
+    if (user) {
+      const votesRemaining = user.votesRemainingPerAddress[submissionId] ?? 10;
+      if (votesRemaining < 10) {
+        return new Promise((resolve, reject) => {
+          const transaction = db.transaction(SUBMISSIONS_STORE, 'readwrite');
+          const store = transaction.objectStore(SUBMISSIONS_STORE);
+          const getReq = store.get(submissionId);
+
+          getReq.onsuccess = () => {
+            const sub = getReq.result;
+            if (sub && (sub.votes[category] || 0) > 0) {
+              user.votesRemainingPerAddress[submissionId] = votesRemaining + 1;
+              sub.votes[category] = sub.votes[category] - 1;
+              sub.totalVotes = (sub.totalVotes || 0) - 1;
+              
+              store.put(sub);
+              localStorage.setItem(USERS_KEY, JSON.stringify(users));
+              resolve({ user, sub });
+            } else {
+              resolve(null);
             }
           };
         });

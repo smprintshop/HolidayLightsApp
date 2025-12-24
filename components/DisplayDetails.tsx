@@ -1,20 +1,26 @@
 import React, { useState } from 'react';
-import { DisplaySubmission, VotingCategory, User } from '../types';
+import { DisplaySubmission, VotingCategory, User, ViewType } from '../types';
 import { MAX_VOTES_PER_ADDRESS, CATEGORY_COLORS } from '../constants';
 
 interface DisplayDetailsProps {
   display: DisplaySubmission;
   user: User | null;
   onClose: () => void;
-  onVote: (category: VotingCategory) => void;
+  onVote: (category: VotingCategory, delta: number) => void;
+  onNavigate: (view: ViewType) => void;
 }
 
-const DisplayDetails: React.FC<DisplayDetailsProps> = ({ display, user, onClose, onVote }) => {
+const DisplayDetails: React.FC<DisplayDetailsProps> = ({ display, user, onClose, onVote, onNavigate }) => {
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   
   const votesRemaining = user ? (user.votesRemainingPerAddress[display.id] ?? MAX_VOTES_PER_ADDRESS) : 0;
   const submitterName = [display.firstName, display.lastName].filter(Boolean).join(' ');
+
+  const handleSignInClick = () => {
+    onClose();
+    onNavigate('PROFILE');
+  };
 
   return (
     <>
@@ -80,35 +86,59 @@ const DisplayDetails: React.FC<DisplayDetailsProps> = ({ display, user, onClose,
             </p>
 
             <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="font-bold text-slate-800 text-sm md:text-base">{user ? 'Cast Your Vote' : 'Voting'}</h3>
+              {!user && (
+                <button 
+                  onClick={handleSignInClick}
+                  className="w-full bg-red-50 border border-red-100 rounded-2xl p-4 text-center animate-in fade-in slide-in-from-top-2 duration-300 hover:bg-red-100 transition-colors group cursor-pointer block"
+                >
+                    <p className="text-sm font-bold text-red-600 group-hover:underline">Please sign in to vote!</p>
+                    <p className="text-xs text-red-500 mt-1">Head to the 'You' tab to get started.</p>
+                </button>
+              )}
+
+              <div className="flex justify-between items-center px-1">
+                <h3 className="font-bold text-slate-800 text-sm md:text-base">{user ? 'Cast Your Vote' : 'Current Standings'}</h3>
                 {user && (
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${votesRemaining > 0 ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-                    {votesRemaining} left
+                    {votesRemaining} votes left
                   </span>
                 )}
               </div>
 
-              {user ? (
-                <div className="grid grid-cols-2 gap-2">
-                  {Object.values(VotingCategory).map((cat) => (
-                    <button
-                      key={cat}
-                      disabled={votesRemaining <= 0}
-                      onClick={() => onVote(cat)}
-                      className={`flex flex-col items-center justify-center p-2.5 md:p-3 rounded-2xl border transition-all active:scale-95 disabled:opacity-50 disabled:grayscale ${CATEGORY_COLORS[cat]} bg-opacity-5 border-opacity-20 hover:bg-opacity-10`}
-                    >
-                      <span className={`w-2 h-2 rounded-full mb-1.5 md:mb-2 ${CATEGORY_COLORS[cat]}`}></span>
-                      <span className="text-[9px] md:text-[10px] font-bold text-center leading-tight uppercase text-slate-700">{cat}</span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center">
-                    <p className="text-sm font-semibold text-slate-700">Please sign in to vote!</p>
-                    <p className="text-xs text-slate-500 mt-1">Head to the 'You' tab to get started.</p>
-                </div>
-              )}
+              <div className="grid grid-cols-1 gap-2">
+                {Object.values(VotingCategory).map((cat) => (
+                  <div
+                    key={cat}
+                    className={`flex items-center justify-between p-3 md:p-4 rounded-2xl border border-slate-100 bg-white transition-all hover:bg-slate-50 shadow-sm`}
+                  >
+                    <span className="text-[10px] md:text-xs font-black uppercase text-slate-700 pr-2 tracking-wide">{cat}</span>
+                    
+                    <div className="flex items-center gap-2 md:gap-4">
+                      <button
+                        disabled={!user || (display.votes[cat] || 0) <= 0 || votesRemaining === MAX_VOTES_PER_ADDRESS}
+                        onClick={() => onVote(cat, -1)}
+                        className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-red-600 hover:border-red-200 active:scale-90 disabled:opacity-20 disabled:active:scale-100 transition-all shadow-sm"
+                        aria-label="Remove vote"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M20 12H4" /></svg>
+                      </button>
+                      
+                      <div className="w-8 md:w-10 text-center">
+                        <span className="text-sm md:text-base font-black text-slate-900">{display.votes[cat] || 0}</span>
+                      </div>
+
+                      <button
+                        disabled={!user || votesRemaining <= 0}
+                        onClick={() => onVote(cat, 1)}
+                        className={`w-9 h-9 md:w-10 md:h-10 rounded-full border flex items-center justify-center text-white active:scale-90 disabled:opacity-30 disabled:active:scale-100 transition-all shadow-md ${CATEGORY_COLORS[cat]} border-transparent`}
+                        aria-label="Add vote"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>

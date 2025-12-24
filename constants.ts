@@ -6,9 +6,5 @@ export const MAX_VOTES_PER_ADDRESS = 10;
 
 export const CATEGORY_COLORS: Record<VotingCategory, string> = {
   [VotingCategory.OVERALL]: 'bg-red-500',
-  [VotingCategory.LIGHTS]: 'bg-yellow-500',
-  [VotingCategory.CREATIVE]: 'bg-purple-500',
   [VotingCategory.ANIMATED]: 'bg-blue-500',
-  [VotingCategory.DIY]: 'bg-green-500',
-  [VotingCategory.CLASSIC]: 'bg-orange-500',
 };

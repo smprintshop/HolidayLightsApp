@@ -28,22 +28,25 @@ const App: React.FC = () => {
     loadData();
   }, []);
 
-  const handleVote = async (category: VotingCategory) => {
+  const handleVote = async (category: VotingCategory, delta: number = 1) => {
     if (!selectedDisplay || !user) return;
     
     try {
-      // Fix: Cast result to any to access 'user' and 'sub' properties which are unknown due to untyped Promise in dbService.
-      const result = await dbService.castVote(user.id, selectedDisplay.id, category) as any;
+      let result: any;
+      if (delta > 0) {
+        result = await dbService.castVote(user.id, selectedDisplay.id, category);
+      } else {
+        result = await dbService.retractVote(user.id, selectedDisplay.id, category);
+      }
+
       if (result) {
         setUser({ ...result.user });
         const allSubs = await dbService.getSubmissions();
         setSubmissions(allSubs);
         setSelectedDisplay({ ...result.sub });
-      } else {
-        alert("No votes remaining for this house!");
       }
     } catch (e) {
-      console.error("Voting failed:", e);
+      console.error("Voting action failed:", e);
     }
   };
 
@@ -98,7 +101,7 @@ const App: React.FC = () => {
   const handleLogin = (email: string) => {
     const loggedInUser = dbService.login(email);
     setUser(loggedInUser);
-    setCurrentView('SUBMIT'); // Redirect directly to submission page
+    setCurrentView('PROFILE'); // Redirect directly to profile page
   };
 
   const handleLogout = () => {
@@ -131,7 +134,7 @@ const App: React.FC = () => {
         if (!user) return <Login onLogin={handleLogin} />;
         const userSubmission = submissions.find(s => s.userId === user.id);
         const profileImageUrl = userSubmission?.photos.find(p => p.isFeatured)?.url || userSubmission?.photos[0]?.url;
-        const totalVotesCast = Object.values(user.votesRemainingPerAddress).reduce((total: number, remaining) => total + (MAX_VOTES_PER_ADDRESS - remaining), 0);
+        const totalVotesCast = Object.values(user.votesRemainingPerAddress).reduce((total: number, remaining: number) => total + (MAX_VOTES_PER_ADDRESS - remaining), 0);
         
         return (
           <div className="p-6 text-center pt-20 h-full overflow-y-auto pb-36 relative z-10 scrollbar-hide">
@@ -184,7 +187,15 @@ const App: React.FC = () => {
         {renderContent()}
       </main>
 
-      {selectedDisplay && <DisplayDetails display={selectedDisplay} user={user} onClose={() => setSelectedDisplay(null)} onVote={handleVote} />}
+      {selectedDisplay && (
+        <DisplayDetails 
+          display={selectedDisplay} 
+          user={user} 
+          onClose={() => setSelectedDisplay(null)} 
+          onVote={handleVote} 
+          onNavigate={handleNavClick}
+        />
+      )}
 
       <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-2xl border-t border-white px-6 py-2 flex justify-between items-center z-50 max-w-md landscape:max-w-4xl mx-auto pb-6 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
         <NavButton active={currentView === 'MAP'} onClick={() => handleNavClick('MAP')} label="Map" icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.446l-5.908-1.97a.75.75 0 00-.472 0l-5.908 1.97a.75.75 0 01-.976-.711V6.51c0-.297.175-.568.445-.69l5.908-1.97a.75.75 0 01.472 0l5.908 1.97a.75.75 0 00.445.068l5.908-1.97a.75.75 0 01.976.711v12.479a.75.75 0 01-.445.69l-5.908 1.97a.75.75 0 01-.472 0z" /></svg>} />
