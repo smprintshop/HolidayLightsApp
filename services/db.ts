@@ -1,165 +1,149 @@
 
+import { 
+  collection, 
+  doc, 
+  getDoc, 
+  getDocs, 
+  setDoc, 
+  updateDoc, 
+  increment, 
+  query, 
+  where,
+  runTransaction
+} from 'firebase/firestore';
+import { 
+  signInAnonymously, 
+  signOut, 
+  updateProfile 
+} from 'firebase/auth';
+import { db, auth } from './firebase';
 import { User, DisplaySubmission, VotingCategory } from '../types';
 
-const DB_NAME = 'HolidayLightsDB';
-const DB_VERSION = 1;
-const USERS_KEY = 'holiday_lights_users';
-const AUTH_KEY = 'holiday_lights_auth';
-const SUBMISSIONS_STORE = 'submissions';
-
-// Helper to open IndexedDB
-const openDB = (): Promise<IDBDatabase> => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(SUBMISSIONS_STORE)) {
-        db.createObjectStore(SUBMISSIONS_STORE, { keyPath: 'id' });
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-};
-
 export const dbService = {
-  getUsers: (): User[] => JSON.parse(localStorage.getItem(USERS_KEY) || '[]'),
-  
-  getCurrentUser: (): User | null => {
-    const userId = localStorage.getItem(AUTH_KEY);
-    if (!userId) return null;
-    return dbService.getUsers().find(u => u.id === userId) || null;
+  getCurrentUser: async (userId: string): Promise<User | null> => {
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    return userDoc.exists() ? (userDoc.data() as User) : null;
   },
 
   getSubmissions: async (): Promise<DisplaySubmission[]> => {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(SUBMISSIONS_STORE, 'readonly');
-      const store = transaction.objectStore(SUBMISSIONS_STORE);
-      const request = store.getAll();
-      request.onsuccess = () => {
-        resolve(request.result || []);
-      };
-      request.onerror = () => reject(request.error);
-    });
+    const querySnapshot = await getDocs(collection(db, 'submissions'));
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DisplaySubmission));
   },
 
-  login: (email: string): User => {
-    const users = dbService.getUsers();
-    let user = users.find(u => u.email === email);
-    if (!user) {
-      user = {
-        id: 'u-' + Math.random().toString(36).substr(2, 9),
+  login: async (email: string): Promise<User> => {
+    // For simplicity in this demo, we use anonymous auth but tag with email
+    // In a real app, use sendSignInLinkToEmail or signInWithPassword
+    const authResult = await signInAnonymously(auth);
+    const userId = authResult.user.uid;
+    
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      const newUser: User = {
+        id: userId,
         name: email.split('@')[0],
         email,
         votesRemainingPerAddress: {}
       };
-      users.push(user);
-      localStorage.setItem(USERS_KEY, JSON.stringify(users));
+      await setDoc(userRef, newUser);
+      return newUser;
     }
-    localStorage.setItem(AUTH_KEY, user.id);
-    return user;
+    
+    return userDoc.data() as User;
   },
 
-  logout: () => {
-    localStorage.removeItem(AUTH_KEY);
+  logout: async () => {
+    await signOut(auth);
   },
 
   saveSubmission: async (sub: Omit<DisplaySubmission, 'id'>) => {
-    const db = await openDB();
-    const newSub = { ...sub, id: 's-' + Date.now() };
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(SUBMISSIONS_STORE, 'readwrite');
-      const store = transaction.objectStore(SUBMISSIONS_STORE);
-      const request = store.put(newSub);
-      request.onsuccess = () => resolve(newSub);
-      request.onerror = () => reject(request.error);
-    });
+    const subRef = doc(collection(db, 'submissions'));
+    const newSub = { ...sub, id: subRef.id };
+    await setDoc(subRef, newSub);
+    return newSub;
   },
 
   updateSubmission: async (id: string, updates: Partial<DisplaySubmission>) => {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(SUBMISSIONS_STORE, 'readwrite');
-      const store = transaction.objectStore(SUBMISSIONS_STORE);
-      const getReq = store.get(id);
-      
-      getReq.onsuccess = () => {
-        const existing = getReq.result;
-        if (existing) {
-          const updated = { ...existing, ...updates };
-          store.put(updated);
-          resolve(updated);
-        } else {
-          reject('Submission not found');
-        }
-      };
-    });
+    const subRef = doc(db, 'submissions', id);
+    await updateDoc(subRef, updates);
   },
 
   castVote: async (userId: string, submissionId: string, category: VotingCategory) => {
-    const users = dbService.getUsers();
-    const user = users.find(u => u.id === userId);
-    const db = await openDB();
+    const userRef = doc(db, 'users', userId);
+    const subRef = doc(db, 'submissions', submissionId);
 
-    if (user) {
-      const votesLeft = user.votesRemainingPerAddress[submissionId] ?? 10;
+    return await runTransaction(db, async (transaction) => {
+      const userDoc = await transaction.get(userRef);
+      const subDoc = await transaction.get(subRef);
+
+      if (!userDoc.exists() || !subDoc.exists()) throw "Document missing";
+
+      const userData = userDoc.data() as User;
+      const subData = subDoc.data() as DisplaySubmission;
+      const votesLeft = userData.votesRemainingPerAddress[submissionId] ?? 10;
+
       if (votesLeft > 0) {
-        return new Promise((resolve, reject) => {
-          const transaction = db.transaction(SUBMISSIONS_STORE, 'readwrite');
-          const store = transaction.objectStore(SUBMISSIONS_STORE);
-          const getReq = store.get(submissionId);
+        const updatedVotesRemaining = {
+          ...userData.votesRemainingPerAddress,
+          [submissionId]: votesLeft - 1
+        };
 
-          getReq.onsuccess = () => {
-            const sub = getReq.result;
-            if (sub) {
-              user.votesRemainingPerAddress[submissionId] = votesLeft - 1;
-              sub.votes[category] = (sub.votes[category] || 0) + 1;
-              sub.totalVotes = (sub.totalVotes || 0) + 1;
-              
-              store.put(sub);
-              localStorage.setItem(USERS_KEY, JSON.stringify(users));
-              resolve({ user, sub });
-            } else {
-              reject('Sub not found');
-            }
-          };
+        transaction.update(userRef, { votesRemainingPerAddress: updatedVotesRemaining });
+        transaction.update(subRef, {
+          [`votes.${category}`]: increment(1),
+          totalVotes: increment(1)
         });
+
+        return { 
+          user: { ...userData, votesRemainingPerAddress: updatedVotesRemaining },
+          sub: { 
+            ...subData, 
+            votes: { ...subData.votes, [category]: (subData.votes[category] || 0) + 1 },
+            totalVotes: (subData.totalVotes || 0) + 1
+          }
+        };
       }
-    }
-    return null;
+      return null;
+    });
   },
 
   retractVote: async (userId: string, submissionId: string, category: VotingCategory) => {
-    const users = dbService.getUsers();
-    const user = users.find(u => u.id === userId);
-    const db = await openDB();
+    const userRef = doc(db, 'users', userId);
+    const subRef = doc(db, 'submissions', submissionId);
 
-    if (user) {
-      const votesRemaining = user.votesRemainingPerAddress[submissionId] ?? 10;
-      if (votesRemaining < 10) {
-        return new Promise((resolve, reject) => {
-          const transaction = db.transaction(SUBMISSIONS_STORE, 'readwrite');
-          const store = transaction.objectStore(SUBMISSIONS_STORE);
-          const getReq = store.get(submissionId);
+    return await runTransaction(db, async (transaction) => {
+      const userDoc = await transaction.get(userRef);
+      const subDoc = await transaction.get(subRef);
 
-          getReq.onsuccess = () => {
-            const sub = getReq.result;
-            if (sub && (sub.votes[category] || 0) > 0) {
-              user.votesRemainingPerAddress[submissionId] = votesRemaining + 1;
-              sub.votes[category] = sub.votes[category] - 1;
-              sub.totalVotes = (sub.totalVotes || 0) - 1;
-              
-              store.put(sub);
-              localStorage.setItem(USERS_KEY, JSON.stringify(users));
-              resolve({ user, sub });
-            } else {
-              resolve(null);
-            }
-          };
+      if (!userDoc.exists() || !subDoc.exists()) throw "Document missing";
+
+      const userData = userDoc.data() as User;
+      const subData = subDoc.data() as DisplaySubmission;
+      const votesRemaining = userData.votesRemainingPerAddress[submissionId] ?? 10;
+
+      if (votesRemaining < 10 && (subData.votes[category] || 0) > 0) {
+        const updatedVotesRemaining = {
+          ...userData.votesRemainingPerAddress,
+          [submissionId]: votesRemaining + 1
+        };
+
+        transaction.update(userRef, { votesRemainingPerAddress: updatedVotesRemaining });
+        transaction.update(subRef, {
+          [`votes.${category}`]: increment(-1),
+          totalVotes: increment(-1)
         });
+
+        return { 
+          user: { ...userData, votesRemainingPerAddress: updatedVotesRemaining },
+          sub: { 
+            ...subData, 
+            votes: { ...subData.votes, [category]: subData.votes[category] - 1 },
+            totalVotes: subData.totalVotes - 1
+          }
+        };
       }
-    }
-    return null;
+      return null;
+    });
   }
 };

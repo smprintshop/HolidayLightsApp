@@ -1,4 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
 import { ViewType, DisplaySubmission, User as AppUser, VotingCategory } from './types';
 import { MAX_VOTES_PER_ADDRESS, BLUFF_PARK_CENTER } from './constants';
 import MapView from './components/MapView';
@@ -7,6 +9,7 @@ import DisplayDetails from './components/DisplayDetails';
 import Leaderboard from './components/Leaderboard';
 import Login from './components/Login';
 import { dbService } from './services/db';
+import { auth } from './services/firebase';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewType>('MAP');
@@ -16,16 +19,22 @@ const App: React.FC = () => {
   const [user, setUser] = useState<AppUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initial Data Load
+  // Initial Data Load & Auth Listener
   useEffect(() => {
-    const loadData = async () => {
-      const storedUser = dbService.getCurrentUser();
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const userData = await dbService.getCurrentUser(firebaseUser.uid);
+        setUser(userData);
+      } else {
+        setUser(null);
+      }
+      
       const storedSubs = await dbService.getSubmissions();
-      setUser(storedUser);
       setSubmissions(storedSubs);
       setIsLoading(false);
-    };
-    loadData();
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const handleVote = async (category: VotingCategory, delta: number = 1) => {
@@ -98,14 +107,21 @@ const App: React.FC = () => {
     setSubmissionToEdit(null);
   };
 
-  const handleLogin = (email: string) => {
-    const loggedInUser = dbService.login(email);
-    setUser(loggedInUser);
-    setCurrentView('PROFILE'); // Redirect directly to profile page
+  const handleLogin = async (email: string) => {
+    setIsLoading(true);
+    try {
+      const loggedInUser = await dbService.login(email);
+      setUser(loggedInUser);
+      setCurrentView('PROFILE');
+    } catch (e) {
+      console.error("Login failed:", e);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleLogout = () => {
-    dbService.logout();
+  const handleLogout = async () => {
+    await dbService.logout();
     setUser(null);
     setCurrentView('MAP');
   };
