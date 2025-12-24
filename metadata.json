@@ -1,0 +1,8 @@
+{
+  "name": "Holiday Lights Spectacular",
+  "description": "A festive community app for residents of Bluff Park, AL to showcase and vote for the best holiday light displays.",
+  "author": "Chris George",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
