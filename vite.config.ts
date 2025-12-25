@@ -21,3 +21,11 @@ export default defineConfig(({ mode }) => {
       }
     };
 });
+// vite.config.js
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  build: {
+    chunkSizeWarningLimit: 2000 // sets the limit to 2000 kB
+  }
+});
