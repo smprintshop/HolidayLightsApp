@@ -7,18 +7,19 @@ import type { Firestore } from 'firebase/firestore';
 
 // Replace these with your actual Firebase project configuration
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyB0Po3Hs59YPVi_PtTwRdYZX2SsBZFeyZw",
+  authDomain: "holiday-lights-app.firebaseapp.com",
+  projectId: "holiday-lights-app",
+  storageBucket: "holiday-lights-app.firebasestorage.app",
+  messagingSenderId: "386079586322",
+  appId: "1:386079586322:web:6f40abf0655eda509f40cb",
+  measurementId: "G-DZ75S4EQEH"
 };
 
 // World-class check: Prevent the app from attempting to connect to "YOUR_PROJECT_ID"
 export const isFirebaseConfigured = 
-    firebaseConfig.projectId !== "YOUR_PROJECT_ID" && 
-    firebaseConfig.apiKey !== "YOUR_API_KEY";
+    firebaseConfig.projectId !== "holiday-lights-app" && 
+    firebaseConfig.apiKey !== "AIzaSyB0Po3Hs59YPVi_PtTwRdYZX2SsBZFeyZw";
 
 let app: FirebaseApp | undefined;
 let auth: Auth | undefined;
